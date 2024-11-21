@@ -1,0 +1,20 @@
+
+toolshed_library(
+    "aio.web",
+    dependencies=[
+        "//deps:reqs#abstracts",
+        "//deps:reqs#aiohttp",
+        "//deps:reqs#pyyaml",
+    ],
+    sources=[
+        "__init__.py",
+        "abstract/__init__.py",
+        "abstract/downloader.py",
+        "abstract/repository.py",
+        "downloader.py",
+        "exceptions.py",
+        "interface.py",
+        "repository.py",
+        "typing.py",
+    ],
+)

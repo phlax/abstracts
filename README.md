@@ -122,6 +122,21 @@ pypi: https://pypi.org/project/aio.run.runner
 ---
 
 
+#### [aio.web](aio.web)
+
+version: 0.1.0.dev0
+
+pypi: https://pypi.org/project/aio.web
+
+##### requirements:
+
+- [abstracts](https://pypi.org/project/abstracts) >=0.0.12
+- [aiohttp](https://pypi.org/project/aiohttp)
+- [pyyaml](https://pypi.org/project/pyyaml)
+
+---
+
+
 #### [dependatool](dependatool)
 
 version: 0.2.4.dev0
