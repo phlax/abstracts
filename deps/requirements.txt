@@ -40,6 +40,7 @@ pytest-asyncio>=0.17.0
 python-gnupg
 pytz
 pyyaml
+ratarmount
 setuptools
 sphinx>=6.2.0
 sphinx-copybutton>=0.5.1
