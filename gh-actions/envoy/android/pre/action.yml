@@ -19,7 +19,7 @@ runs:
       echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
       sudo udevadm control --reload-rules
       sudo udevadm trigger --name-match=kvm
-  - uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e
+  - uses: nick-fields/retry@c97818ca39074beaea45180dba704f92496a0082
     name: 'Start emulator'
     with:
       timeout_minutes: 15
