@@ -1,0 +1,174 @@
+inputs:
+  current:
+    type: string
+  issue-author:
+    type: string
+    default: "app/ci-envoy"
+  issue-body:
+    type: string
+    default: Tracking issue for CI failures.
+  issue-label:
+    type: string
+    default: "ci:failures"
+  output:
+    type: string
+    required: true
+  previous:
+    type: string
+  repo:
+    type: string
+    required: true
+    default: ${{ github.repository }}
+  report-cmd:
+    type: string
+    default: >-
+      bazel run
+      --config=ci
+      //tools/ci:report
+      --
+  status:
+    type: string
+  template-issue-title:
+    type: string
+    default: >-
+      CI failures \($monday | strflocaltime("%Y.%m.%d"))-\($sunday | strflocaltime("%Y.%m.%d"))
+  template-request:
+    type: string
+    default: |
+      ##### [\($request.event)@\($requestDate)](\($requestURL))
+
+      \($workflowList)
+  template-report:
+    type: string
+    default: |
+      ### [\($branch)@\($commit | .[0:7])](\($commitURL))
+
+      \($commitMessage)
+
+      \($requestList)
+
+  template-workflow:
+    type: string
+    default: |
+      - [\($workflow.name) (\($workflow.conclusion))](\($workflowURL))
+  token:
+    type: string
+    required: true
+
+outputs:
+  id:
+    value: ${{ steps.issue-id.outputs.value || steps.issue-created.outputs.id }}
+
+
+runs:
+  using: composite
+  steps:
+  - run: |
+      # Generate the report
+      REPORT_ARGS=()
+      if [[ -n "${{ inputs.current }}" ]]; then
+          REPORT_ARGS+=("--current", "${{ inputs.current }}")
+      elif [[ -n "${{ inputs.previous }}" ]]; then
+          REPORT_ARGS+=("--previous" "${{ inputs.previous }}")
+      else
+          echo "::error::Current or previous must be set!" >&2
+          exit 1
+      fi
+      read -ra REPORT_CMD <<< "${{ inputs.report-cmd }}"
+      REPORT="$( \
+          "${REPORT_CMD[@]}" \
+             --repo ${{ github.repository }} \
+             --status ${{ inputs.status || 'all' }} "${REPORT_ARGS[@]}")"
+      echo "report=${REPORT}" >> $GITHUB_OUTPUT
+    shell: bash
+    env:
+      GITHUB_TOKEN: ${{ inputs.token }}
+    id: report
+  - uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.2.36
+    if: >-
+      ${{ inputs.output == 'artifact'
+          || inputs.output == 'console'
+          || (fromJSON(env.CI_DEBUG || 'false') && true || false)  }}
+    with:
+      input: ${{ steps.report.outputs.report }}
+      options: -C
+      print-output: >-
+        ${{ inputs.output == 'console'
+            || (fromJSON(env.CI_DEBUG || 'false') && true || false)  }}
+      output-path: ${{ inputs.output == 'artifact' && '/tmp/report.json' || '' }}
+  - run: |
+      # Create temp file
+      FPATH=$(mktemp)
+      echo "path=${FPATH}" > $GITHUB_OUTPUT
+    shell: bash
+    if: ${{ inputs.output == 'envoy-ci' }}
+    id: output
+  - uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.2.36
+    id: report-output
+    name: Generate markdown report
+    if: ${{ inputs.output == 'envoy-ci' }}
+    with:
+      input: ${{ steps.report.outputs.report }}
+      options: -r
+      output-path: ${{ steps.output.outputs.path }}
+      filter: |
+        [to_entries[]
+         | .key as $commit
+         | .value as $info
+         | $info.head.message as $message
+         | $info.head.target_branch as $branch
+         | "https://github.com/${{ inputs.repo }}/commit/\($commit)" as $commitURL
+         | ($message | split("\n")) as $lines
+         | $lines[0] as $title
+         | ($lines[1:] | join("\n") | gfm::blockquote) as $content
+         | ({$title, $content} | gfm::collapse) as $commitMessage
+         | [$info.requests
+            | to_entries[]
+            | .key as $requestId
+            | .value as $request
+            | "https://github.com/${{ inputs.repo }}/actions/runs/\($requestId)" as $requestURL
+            | ($request.started | floor | todate) as $requestDate
+            | [$request.workflows
+               | to_entries[]
+               | .key as $workflowId
+               | .value as $workflow
+               | "https://github.com/${{ inputs.repo }}/actions/runs/\($workflowId)" as $workflowURL
+               | "${{ inputs.template-workflow }}"]
+            | join("\n") as $workflowList
+            | "${{ inputs.template-request }}"]
+         | join("\n") as $requestList
+         | "${{ inputs.template-report }}"]
+        | join("\n")
+  - uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.2.36
+    id: issue-title
+    if: ${{ inputs.output == 'envoy-ci' }}
+    with:
+      options: -r
+      filter: |
+        now
+        | (now - (strftime("%u") | tonumber - 1) * 86400) as $monday
+        | ($monday + 6*86400) as $sunday
+        | "${{ inputs.template-issue-title }}"
+  - uses: envoyproxy/toolshed/gh-actions/github/issue/get@e8acc44644d9a65d65d27ab68564eb1185f7e92b
+    id: issue
+    if: ${{ inputs.output == 'envoy-ci' }}
+    with:
+      GITHUB_TOKEN: ${{ inputs.token }}
+      author: ${{ inputs.issue-author }}
+      title: ${{ steps.issue-title.outputs.value }}
+      body: ${{ inputs.issue-body }}
+      label: ${{ inputs.issue-label }}
+      create: true
+  - run: |
+      # Add comment to issue
+      gh issue comment ${{ steps.issue.outputs.id }} --body-file ${{ steps.output.outputs.path }}
+    shell: bash
+    if: ${{ steps.issue.outputs.id }}
+    env:
+      GH_TOKEN: ${{ inputs.token }}
+
+  - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4.4.3
+    if: ${{ inputs.output == 'artifact' }}
+    with:
+      path: /tmp/report.json
+      name: report
