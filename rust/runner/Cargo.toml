@@ -1,0 +1,27 @@
+[package]
+name = "toolshed_runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.9"
+futures = "0.3"
+log = "0.4"
+# regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = { version = "0.11" }
+mockall_double = "0.3"
+guerrilla = "0.1"
+
+[lib]
+name = "toolshed_runner"
+# crate-type = ["cdylib"]
+path = "src/lib.rs"
